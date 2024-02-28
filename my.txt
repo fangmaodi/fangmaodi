@@ -1,0 +1,29 @@
+CTV1 中国,http://dbiptv.sn.chinamobile.com/PLTV/88888890/224/3221226231/index.m3u8
+
+CCTV2",http://dbiptv.sn.chinamobile.com/PLTV/88888890/224/3221226195/index.m3u8
+
+"CCTV3,http://dbiptv.sn.chinamobile.com/PLTV/88888890/224/3221226397/index.m3u8"),
+
+        
+
+   "CCTV4",http://39.134.24.161/dbiptv.sn.chinamobile.com/PLTV/88888890/224/3221226191/index.m3u8",
+
+                    http://dbiptv.sn.chinamobile.com/PLTV/88888890/224/3221226191/index.m3u8"
+
+                "CCTV5",http://dbiptv.sn.chinamobile.com/PLTV/88888890/224/3221226395/index.m3u8"),
+
+       
+
+                "CCTV6",http://dbiptv.sn.chinamobile.com/PLTV/88888890/224/3221226393/index.m3u8"),
+
+             
+
+                "CCTV7",http://dbiptv.sn.chinamobile.com/PLTV/88888890/224/3221226192/index.m3u8"),
+
+       
+
+                "CCTV8",http://dbiptv.sn.chinamobile.com/PLTV/88888890/224/3221226391/index.m3u8"),
+
+           
+
+                "CCTV9,http://dbiptv.sn.chinamobile.com/PLTV/88888890/224/3221226197/index.m3u8")
