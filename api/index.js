@@ -48,23 +48,4 @@ module.exports = async (req, res) => {
     } catch (error) {
         return res.status(500).json({ code: 500, msg: "服务器发生错误", error: error.message });
     }
-};        // 功能二：如果是歌曲直链解析请求 (URL 带有 ?mid=数字)
-        if (mid) {
-            const targetUrl = `https://antiserver.kuwo.cn/anti.s?type=convert_url&rid=${mid}&format=mp3&response=url`;
-            const response = await fetch(targetUrl, { headers: { ...customHeaders, 'Host': 'antiserver.kuwo.cn' } });
-            const audioUrl = await response.text();
-
-            if (audioUrl && audioUrl.startsWith('http')) {
-                return res.status(200).json({ code: 200, type: "url", audio_url: audioUrl.trim() });
-            } else {
-                return res.status(404).json({ code: 404, msg: "没能提取到有效直链" });
-            }
-        }
-
-        // 如果什么参数都没传
-        return res.status(400).json({ code: 400, msg: "请传入 key 搜索关键词或 mid 歌曲参数！" });
-
-    } catch (error) {
-        return res.status(500).json({ code: 500, msg: "接口中转崩溃", error: error.message });
-    }
 };
