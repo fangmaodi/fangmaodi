@@ -1,10 +1,9 @@
 module.exports = async (req, res) => {
-    // 开启全网跨域（确保你的 TVBox、手机 App 或本地网页能直接调用）
+    // 开启全网跨域
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
-    // 获取用户传过来的歌曲输入参数
     const { mid } = req.query;
 
     if (!mid) {
@@ -12,32 +11,37 @@ module.exports = async (req, res) => {
     }
 
     try {
-        // 核心：酷我官方的最新高音质直链解析源地址
-        const targetUrl = `http://www.kuwo.cn/api/v1/mp3/link?mid=${mid}&type=music&bitrate=320k&response=url`;
+        // 核心：换成酷我目前最新的 H5/App 音乐播放直链接口
+        const targetUrl = `https://antiserver.kuwo.cn/anti.s?type=convert_url&rid=${mid}&format=mp3&response=url`;
 
-        // 关键黑科技：完美伪装成酷我官网的请求头
+        // 依然保持强大的官方浏览器伪装
         const customHeaders = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Referer': 'http://www.kuwo.cn/',
-            'csrf': 'HM9Z147X7BG',
-            'Cookie': 'kw_token=HM9Z147X7BG'
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/504.1',
+            'Referer': 'https://m.kuwo.cn/',
+            'Host': 'antiserver.kuwo.cn'
         };
 
-        // 直接使用 Vercel 自带的原生 fetch，去抓取酷我数据
+        // Vercel 发起抓取
         const response = await fetch(targetUrl, { headers: customHeaders });
-        const data = await response.json();
+        
+        // 注意：这个新接口如果成功，会直接返回一串纯文本的 http://... 播放直链，而不是 JSON
+        const audioUrl = await response.text();
 
-        // 吐出精简干净的全新定制接口
-        if (data && data.code === 200 && data.data && data.data.url) {
+        // 判断返回的内容是不是一个合法的网址
+        if (audioUrl && audioUrl.startsWith('http')) {
             return res.status(200).json({
                 status: "success",
                 code: 200,
                 service: "我的酷我专属 API 面板",
                 music_id: mid,
-                audio_url: data.data.url
+                audio_url: audioUrl.trim() // 这就是直接可以放的真实 MP3 地址
             });
         } else {
-            return res.status(404).json({ code: 404, msg: "没能从酷我提取到该歌曲的有效直链" });
+            return res.status(404).json({ 
+                code: 404, 
+                msg: "没能从酷我提取到该歌曲的有效直链", 
+                debug: audioUrl 
+            });
         }
 
     } catch (error) {
