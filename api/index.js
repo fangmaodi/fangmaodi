@@ -1,7 +1,9 @@
 // api/index.js
-// 专门修复洛雪一直转圈“连接中”的格式清洗版后端
+// 100% 杜绝 500 错误的原生 HTTPS 兼容版后端
+const https = require('https');
+
 module.exports = async (req, res) => {
-  // 1. 强力注入跨域安全头，确保手机端不会因为安全策略卡住
+  // 强力跨域头注入
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-request-key');
@@ -12,29 +14,79 @@ module.exports = async (req, res) => {
 
   const { source, mid, type } = req.query;
 
-  // 2. 浏览器验证连通性
+  // 1. 连通性测试：浏览器或洛雪初始连接，立刻秒回 200，绝不卡死
   if (!source || !mid) {
     return res.status(200).json({
       code: 0,
       status: "ok",
-      msg: "中转网关已准备就绪！"
+      msg: "原生中转网关已 100% 完美激活！"
     });
   }
 
+  // 2. 使用绝对稳定的 try-catch 护罩，确保整个函数不管出什么错都强制返回 200 JSON 状态
   try {
-    // 聚合源上游解析接口
-    const targetApi = `https://music-dl.sayqz.com/api/url/${source}/${mid}/${type}`;
-    
-    // 5秒强控超时，超时直接强制返回，不让洛雪无限等
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const targetUrl = `https://music-dl.sayqz.com/api/url/${source}/${mid}/${type}`;
 
-    const response = await fetch(targetApi, {
-      signal: controller.signal,
-      headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    // 使用 Node.js 核心的原生 https.get 方法请求上游，彻底避开 fetch 的版本兼容问题
+    const fetchUpstream = () => {
+      return new Promise((resolve, reject) => {
+        const request = https.get(targetUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          },
+          timeout: 5000 // 5秒超时
+        }, (response) => {
+          let data = '';
+          response.on('data', (chunk) => { data += chunk; });
+          response.on('end', () => { resolve({ statusCode: response.statusCode, body: data }); });
+        });
+
+        request.on('error', (err) => { reject(err); });
+        request.on('timeout', () => { request.destroy(); reject(new Error('Timeout')); });
+      });
+    };
+
+    const resultFromUpstream = await fetchUpstream();
+
+    if (resultFromUpstream.statusCode !== 200) {
+      return res.status(200).json({ code: 1, msg: `上游网关返回异常状态码: ${resultFromUpstream.statusCode}` });
+    }
+
+    // 解析上游数据
+    const result = JSON.parse(resultFromUpstream.body);
+
+    // 精细格式清洗：把任何直链结构单独剥离出来
+    let finalAudioUrl = "";
+    if (result) {
+      if (typeof result.data === 'string' && result.data.startsWith('http')) {
+        finalAudioUrl = result.data;
+      } else if (result.data && typeof result.data === 'object' && result.data.url) {
+        finalAudioUrl = result.data.url;
+      } else if (typeof result.url === 'string' && result.url.startsWith('http')) {
+        finalAudioUrl = result.url;
       }
+    }
+
+    // 3. 成功拿到直链，喂给洛雪
+    if (finalAudioUrl) {
+      return res.status(200).json({
+        code: 0,
+        msg: "success",
+        data: finalAudioUrl
+      });
+    }
+
+    return res.status(200).json({ code: 1, msg: "公开链路解析空数据，请尝试切换歌曲或音质" });
+
+  } catch (error) {
+    // 🟩 绝对防线：上游挂了、超时了、网络阻断了，全部强制转换为 200 状态码返回给手机
+    // 只要有这个兜底，Vercel 平台永远没有机会向手机抛出 500: FUNCTION_INVOCATION_FAILED 错误！
+    return res.status(200).json({
+      code: 1,
+      msg: `网关中转成功，但上游接口崩溃: ${error.message}`
     });
+  }
+};    });
     
     clearTimeout(timeoutId);
 
