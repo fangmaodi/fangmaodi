@@ -1,10 +1,10 @@
 // api/index.js
-// 针对 Vercel 500 崩溃全面优化的安全版后端
+// 专门修复洛雪一直转圈“连接中”的格式清洗版后端
 module.exports = async (req, res) => {
-  // 1. 强制注入全套跨域头，确保客户端能收到任何状态码
+  // 1. 强力注入跨域安全头，确保手机端不会因为安全策略卡住
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-request-key');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -12,29 +12,70 @@ module.exports = async (req, res) => {
 
   const { source, mid, type } = req.query;
 
-  // 2. 浏览器访问或洛雪测试连通性，立刻秒回 200，保证不崩
+  // 2. 浏览器验证连通性
   if (!source || !mid) {
     return res.status(200).json({
       code: 0,
       status: "ok",
-      msg: "我的Vercel中转站已经100%完美连通！"
+      msg: "中转网关已准备就绪！"
     });
   }
 
-  // 3. 安全沙箱：用 try-catch 死死护住函数，哪怕上游挂了也绝不报 500
   try {
-    // 💡 核心对齐：提取自《全豆要v5.0》目前在全网最稳定的公开大厂网关
+    // 聚合源上游解析接口
     const targetApi = `https://music-dl.sayqz.com/api/url/${source}/${mid}/${type}`;
     
-    // 设置 5 秒强制超时控制器，防止 Vercel 无服务器函数因为等太久被系统强杀
+    // 5秒强控超时，超时直接强制返回，不让洛雪无限等
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     const response = await fetch(targetApi, {
       signal: controller.signal,
       headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      return res.status(200).json({ code: 1, msg: "上游接口网关响应错误" });
+    }
+
+    const result = await response.json();
+
+    // 💡 关键核心：像素级清洗。无论上游返回的多乱，必须把音源直链（String）单独剥离出来
+    let finalAudioUrl = "";
+
+    if (result) {
+      if (typeof result.data === 'string' && result.data.startsWith('http')) {
+        finalAudioUrl = result.data;
+      } else if (result.data && typeof result.data === 'object' && result.data.url) {
+        finalAudioUrl = result.data.url;
+      } else if (typeof result.url === 'string' && result.url.startsWith('http')) {
+        finalAudioUrl = result.url;
+      }
+    }
+
+    // 3. 如果成功提取到直链，原封不动喂给洛雪，直接打破转圈卡死状态
+    if (finalAudioUrl) {
+      return res.status(200).json({
+        code: 0,
+        msg: "success",
+        data: finalAudioUrl // 必须是一串干净的 http/https 音乐直链字符串
+      });
+    }
+
+    return res.status(200).json({ code: 1, msg: "公开链未能成功提取到有效的歌曲音频流" });
+
+  } catch (error) {
+    // 🟩 兜底护罩：哪怕报错，也给洛雪返回标准 200，并带上错误文字，洛雪收到 code:1 会立刻弹窗报错，而不会卡死转圈
+    return res.status(200).json({ 
+      code: 1, 
+      msg: error.name === 'AbortError' ? '连接上游超时，请重试' : `中转处理失败: ${error.message}` 
+    });
+  }
+};        'Accept': 'application/json'
       }
     });
     
