@@ -46,18 +46,36 @@ const sha256 = (function() {
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
-    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
     const { source, mid, type } = req.query;
     if (!mid) return res.status(200).json({ status: "ok" });
 
-    // 仅在云端计算原厂合规签名路径，不发出真实 fetch 请求
+    // 1. 动态生成完全符合原版加签规范的路径
     const requestPath = `/lxmusicv4/url/${source}/${mid}/${type}`;
     const sign = sha256(requestPath + SCRIPT_MD5 + SECRET_KEY);
+    const targetUrl = `https://88.lxmusic.xn--fiqs8s${requestPath}?sign=${sign}`;
 
-    // 直接返回拼装好的、高纯度的最终请求全路径
-    return res.status(200).json({
-        code: 0,
-        fullUrl: `https://88.lxmusic.xn--fiqs8s${requestPath}?sign=${sign}`
-    });
+    try {
+        // 2. 直接中转抓取直链，用最标准的洛雪白名单格式吐回去
+        const fetchResponse = await fetch(targetUrl, {
+            method: 'GET',
+            headers: {
+                'accept': 'application/json',
+                'x-request-key': 'lxmusic',
+                'user-agent': 'lx-music-request/2.0.0'
+            }
+        });
+        const body = await fetchResponse.json();
+        
+        if (body && (body.code === 0 || body.code === 200)) {
+            return res.status(200).json({
+                code: 0,
+                data: body.data || body.url
+            });
+        }
+        return res.status(200).json({ code: 1, msg: body?.msg || "上游解析空响应" });
+    } catch (e) {
+        return res.status(200).json({ code: 1, msg: "Vercel中转故障: " + e.message });
+    }
 };
