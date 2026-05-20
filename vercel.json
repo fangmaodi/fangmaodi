@@ -2,8 +2,8 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/lxmusicv4/url/:source/:songId/:quality",
-      "destination": "/api?source=:source&songId=:songId&quality=:quality"
+      "source": "/(.*)",
+      "destination": "/api/index.js"
     }
   ]
 }
