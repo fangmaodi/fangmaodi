@@ -1,90 +1,50 @@
 // api/index.js
-// 使用最稳固的 CommonJS 语法，100% 根除 GitHub 提交后的编译语法错误
+// 终极双保险接口版：内置双通道，自动重试，严丝合缝
 const https = require('https');
 
 module.exports = async (req, res) => {
-  // 注入完整的跨域安全头
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-request-key');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // 提取洛雪传过来的参数
-  const source = req.query.source;
-  const mid = req.query.mid;
-  const type = req.query.type;
+  const { source, mid, type } = req.query;
 
-  // 连通性测试：初始连接秒回 200
   if (!source || !mid) {
-    return res.status(200).json({
-      code: 0,
-      status: "ok",
-      msg: "GitHub 代码已同步，中转网关激活成功！"
-    });
+    return res.status(200).json({ code: 0, status: "ok", msg: "网关就绪" });
   }
 
-  try {
-    const targetUrl = `https://music-dl.sayqz.com/api/url/${source}/${mid}/${type}`;
+  // 两个备用接口通道
+  const apis = [
+    `https://music.liuzhiting.cn/api/url/${source}/${mid}/${type}`,
+    `https://music-dl.sayqz.com/api/url/${source}/${mid}/${type}`
+  ];
 
-    // 使用原生的 https.get 模块方法请求上游
-    const fetchUpstream = () => {
-      return new Promise((resolve, reject) => {
-        const request = https.get(targetUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          }
-        }, (response) => {
-          let data = '';
-          response.on('data', (chunk) => { data += chunk; });
-          response.on('end', () => { resolve({ statusCode: response.statusCode, body: data }); });
-        });
-
-        request.on('error', (err) => { reject(err); });
-        // 设置 6秒超时防止挂起
-        request.setTimeout(6000, () => {
-          request.destroy();
-          reject(new Error('Timeout'));
-        });
-      });
-    };
-
-    const resultFromUpstream = await fetchUpstream();
-
-    if (resultFromUpstream.statusCode !== 200) {
-      return res.status(200).json({ code: 1, msg: "上游网关异常响应" });
-    }
-
-    const result = JSON.parse(resultFromUpstream.body);
-
-    // 精细格式清洗，剥离出干净的音频直链
-    let finalAudioUrl = "";
-    if (result) {
-      if (typeof result.data === 'string' && result.data.startsWith('http')) {
-        finalAudioUrl = result.data;
-      } else if (result.data && typeof result.data === 'object' && result.data.url) {
-        finalAudioUrl = result.data.url;
-      } else if (typeof result.url === 'string' && result.url.startsWith('http')) {
-        finalAudioUrl = result.url;
-      }
-    }
-
-    if (finalAudioUrl) {
-      return res.status(200).json({
-        code: 0,
-        msg: "success",
-        data: finalAudioUrl
-      });
-    }
-
-    return res.status(200).json({ code: 1, msg: "公开链路未提取到音频流，请尝试切歌" });
-
-  } catch (error) {
-    return res.status(200).json({
-      code: 1,
-      msg: `中转正常，但上游链路有些卡顿: ${error.message}`
+  // 定义请求函数
+  const fetchUrl = (url) => {
+    return new Promise((resolve) => {
+      https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 5000 }, (resp) => {
+        let data = '';
+        resp.on('data', (chunk) => { data += chunk; });
+        resp.on('end', () => { resolve(data); });
+      }).on('error', () => resolve(null)).setTimeout(5000, function() { this.destroy(); resolve(null); });
     });
+  };
+
+  // 尝试第一个，不行就试第二个
+  for (const url of apis) {
+    const body = await fetchUrl(url);
+    if (body) {
+      try {
+        const result = JSON.parse(body);
+        let finalUrl = result.data?.url || result.data || result.url;
+        if (finalUrl && typeof finalUrl === 'string') {
+          return res.status(200).json({ code: 0, msg: "success", data: finalUrl });
+        }
+      } catch (e) {}
+    }
   }
+
+  return res.status(200).json({ code: 1, msg: "所有上游接口均无响应" });
 };
