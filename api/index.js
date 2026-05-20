@@ -1,21 +1,24 @@
 module.exports = async (req, res) => {
-    // 允许洛雪跨域抓取
+    // 跨域头放行
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', '*');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
-    const { source, mid, type, sign } = req.query;
-    
-    // 如果是洛雪初始化或浏览器探活，直接吐回正常状态
-    if (!mid || !sign) {
+    if (req.method === 'OPTIONS') return res.status(200).end();
+
+    // 1. 拿到洛雪发来的完整请求后缀（例如：/lxmusicv4/url/tx/003a/128k?sign=xxxx）
+    const fullPath = req.url;
+
+    // 如果是浏览器或洛雪在探活，直接吐回状态
+    if (!fullPath || fullPath === '/' || fullPath.includes('status=ok')) {
         return res.status(200).json({ status: "ok" });
     }
 
-    // 拼装出携带高纯度原厂签名的最终真实请求路径
-    const targetUrl = `https://88.lxmusic.xn--fiqs8s/lxmusicv4/url/${source}/${mid}/${type}?sign=${sign}`;
+    // 2. 将 Vercel 域名直接替换为原厂目标服务器域名，全量透传！
+    const targetUrl = `https://88.lxmusic.xn--fiqs8s${fullPath}`;
 
     try {
-        // 使用 Vercel 骨干网直连上游解密服务器
         const fetchResponse = await fetch(targetUrl, {
             method: 'GET',
             headers: {
@@ -26,10 +29,9 @@ module.exports = async (req, res) => {
         });
         
         const body = await fetchResponse.json();
-        
-        // 100% 透传上游回传的音频播放直链
+        // 100% 把原厂解密服务器吐出的直链透传给手机洛雪
         return res.status(200).json(body);
     } catch (e) {
-        return res.status(200).json({ code: 4, msg: "Vercel 链路中继故障: " + e.message });
+        return res.status(200).json({ code: 5, msg: "Vercel 中继代理崩溃: " + e.message });
     }
 };
