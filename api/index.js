@@ -1,5 +1,5 @@
 module.exports = async (req, res) => {
-    // 跨域头放行
+    // 完美的跨域支持
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', '*');
@@ -7,15 +7,14 @@ module.exports = async (req, res) => {
 
     if (req.method === 'OPTIONS') return res.status(200).end();
 
-    // 1. 拿到洛雪发来的完整请求后缀（例如：/lxmusicv4/url/tx/003a/128k?sign=xxxx）
+    // 1. 自动捕获路由
     const fullPath = req.url;
 
-    // 如果是浏览器或洛雪在探活，直接吐回状态
     if (!fullPath || fullPath === '/' || fullPath.includes('status=ok')) {
         return res.status(200).json({ status: "ok" });
     }
 
-    // 2. 将 Vercel 域名直接替换为原厂目标服务器域名，全量透传！
+    // 2. 拼接原厂解密服务器的真实地址
     const targetUrl = `https://88.lxmusic.xn--fiqs8s${fullPath}`;
 
     try {
@@ -29,9 +28,9 @@ module.exports = async (req, res) => {
         });
         
         const body = await fetchResponse.json();
-        // 100% 把原厂解密服务器吐出的直链透传给手机洛雪
+        // 3. 将原厂返回的直链数据原封不动传回
         return res.status(200).json(body);
     } catch (e) {
-        return res.status(200).json({ code: 5, msg: "Vercel 中继代理崩溃: " + e.message });
+        return res.status(200).json({ code: 5, msg: "Vercel 代理层异常: " + e.message });
     }
 };
