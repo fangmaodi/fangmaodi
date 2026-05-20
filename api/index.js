@@ -1,10 +1,8 @@
-// 引入原脚本的核心加密与配置参数
 const API_URL = "https://88.lxmusic.xn--fiqs8s";
 const API_KEY = `lxmusic`;
 const SECRET_KEY = 'JaJ?a7Nwk_Fgj?2o:znAkst';
 const SCRIPT_MD5 = '1888f9865338afe6d5534b35171c61a4';
 
-// 简化的 SHA256 加密算法（完整保留，确保签名 100% 正确）
 const sha256 = (function() {
   "use strict";
   var HEX_CHARS = '0123456789abcdef'.split('');
@@ -44,41 +42,29 @@ const sha256 = (function() {
     }
     this.h0 = (this.h0 + a) >>> 0; this.h1 = (this.h1 + b) >>> 0; this.h2 = (this.h2 + c) >>> 0; this.h3 = (this.h3 + d) >>> 0; this.h4 = (this.h4 + e) >>> 0; this.h5 = (this.h5 + f) >>> 0; this.h6 = (this.h6 + g) >>> 0; this.h7 = (this.h7 + h) >>> 0;
   };
-  Sha256.prototype.hex = function() {
-    this.finalize();
-    var h0 = this.h0, h1 = this.h1, h2 = this.h2, h3 = this.h3, h4 = this.h4, h5 = this.h5, h6 = this.h6, h7 = this.h7;
-    return HEX_CHARS[(h0 >> 28) & 0x0F] + HEX_CHARS[(h0 >> 24) & 0x0F] + HEX_CHARS[(h0 >> 20) & 0x0F] + HEX_CHARS[(h0 >> 16) & 0x0F] + HEX_CHARS[(h0 >> 12) & 0x0F] + HEX_CHARS[(h0 >> 8) & 0x0F] + HEX_CHARS[(h0 >> 4) & 0x0F] + HEX_CHARS[h0 & 0x0F] + HEX_CHARS[(h1 >> 28) & 0x0F] + HEX_CHARS[(h1 >> 24) & 0x0F] + HEX_CHARS[(h1 >> 20) & 0x0F] + HEX_CHARS[(h1 >> 16) & 0x0F] + HEX_CHARS[(h1 >> 12) & 0x0F] + HEX_CHARS[(h1 >> 8) & 0x0F] + HEX_CHARS[(h1 >> 4) & 0x0F] + HEX_CHARS[h1 & 0x0F] + HEX_CHARS[(h2 >> 28) & 0x0F] + HEX_CHARS[(h2 >> 24) & 0x0F] + HEX_CHARS[(h2 >> 20) & 0x0F] + HEX_CHARS[(h2 >> 16) & 0x0F] + HEX_CHARS[(h2 >> 12) & 0x0F] + HEX_CHARS[(h2 >> 8) & 0x0F] + HEX_CHARS[(h2 >> 4) & 0x0F] + HEX_CHARS[h2 & 0x0F] + HEX_CHARS[(h3 >> 28) & 0x0F] + HEX_CHARS[(h3 >> 24) & 0x0F] + HEX_CHARS[(h3 >> 20) & 0x0F] + HEX_CHARS[(h3 >> 16) & 0x0F] + HEX_CHARS[(h3 >> 12) & 0x0F] + HEX_CHARS[(h3 >> 8) & 0x0F] + HEX_CHARS[(h3 >> 4) & 0x0F] + HEX_CHARS[h3 & 0x0F] + HEX_CHARS[(h4 >> 28) & 0x0F] + HEX_CHARS[(h4 >> 24) & 0x0F] + HEX_CHARS[(h4 >> 20) & 0x0F] + HEX_CHARS[(h4 >> 16) & 0x0F] + HEX_CHARS[(h4 >> 12) & 0x0F] + HEX_CHARS[(h4 >> 8) & 0x0F] + HEX_CHARS[(h4 >> 4) & 0x0F] + HEX_CHARS[h4 & 0x0F] + HEX_CHARS[(h5 >> 28) & 0x0F] + HEX_CHARS[(h5 >> 24) & 0x0F] + HEX_CHARS[(h5 >> 20) & 0x0F] + HEX_CHARS[(h5 >> 16) & 0x0F] + HEX_CHARS[(h5 >> 12) & 0x0F] + HEX_CHARS[(h5 >> 8) & 0x0F] + HEX_CHARS[(h5 >> 4) & 0x0F] + HEX_CHARS[h5 & 0x0F] + HEX_CHARS[(h6 >> 28) & 0x0F] + HEX_CHARS[(h6 >> 24) & 0x0F] + HEX_CHARS[(h6 >> 20) & 0x0F] + HEX_CHARS[(h6 >> 16) & 0x0F] + HEX_CHARS[(h6 >> 12) & 0x0F] + HEX_CHARS[(h6 >> 8) & 0x0F] + HEX_CHARS[(h6 >> 4) & 0x0F] + HEX_CHARS[h6 & 0x0F] + HEX_CHARS[(h7 >> 28) & 0x0F] + HEX_CHARS[(h7 >> 24) & 0x0F] + HEX_CHARS[(h7 >> 20) & 0x0F] + HEX_CHARS[(h7 >> 16) & 0x0F] + HEX_CHARS[(h7 >> 12) & 0x0F] + HEX_CHARS[(h7 >> 8) & 0x0F] + HEX_CHARS[(h7 >> 4) & 0x0F] + HEX_CHARS[h7 & 0x0F];
-  };
   return function(message) { return new Sha256().update(message).hex(); };
 })();
 
-// Vercel Serverless 处理函数
 module.exports = async (req, res) => {
-    // 允许洛雪跨域请求
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
+    if (req.method === 'OPTIONS') return res.status(200).end();
 
-    // 接收洛雪发过来的参数：音源(source)、歌曲ID(mid)、音质(type)
     const source = req.query.source || 'wy';
-    const mid = req.query.mid || req.query.id;
+    const mid = req.query.mid;
     const quality = req.query.type || '128k';
 
     if (!mid) {
-        return res.status(200).json({ code: 0, msg: "独家解密 Vercel 接口已就绪，等待洛雪喂入数据" });
+        return res.status(200).json({ code: 0, msg: "Vercel 接口正常，等待传入参数" });
     }
 
     try {
-        // 1. 动态计算解密签名路径
         const requestPath = `/lxmusicv4/url/${source}/${mid}/${quality}`;
         const sign = sha256(requestPath + SCRIPT_MD5 + SECRET_KEY);
         const targetUrl = `${API_URL}${requestPath}?sign=${sign}`;
 
-        // 2. 借助 Vercel 后端网络去请求目标加密服务器
         const fetchResponse = await fetch(targetUrl, {
             method: 'GET',
             headers: {
@@ -90,19 +76,19 @@ module.exports = async (req, res) => {
 
         const body = await fetchResponse.json();
 
-        // 3. 将抓取到的直链结果完美洗清洗，吐给洛雪客户端
+        // 核心修复：更严谨地清洗并提取真实歌曲直链
         if (body && (body.code === 0 || body.code === 200)) {
             const realUrl = body.data || body.url;
-            return res.status(200).json({
-                code: 0, // 洛雪规范：0代表解析成功
-                type: "mp3",
-                url: realUrl
-            });
-        } else {
-            return res.status(200).json({ code: 2, msg: body.msg || "解析失败" });
+            if (realUrl) {
+                return res.status(200).json({
+                    code: 0,
+                    url: realUrl
+                });
+            }
         }
+        return res.status(200).json({ code: 2, msg: body?.msg || "上游解析失败" });
 
     } catch (error) {
-        return res.status(200).json({ code: 4, msg: "Vercel 内部中转错误: " + error.message });
+        return res.status(200).json({ code: 4, msg: "中转异常: " + error.message });
     }
 };
