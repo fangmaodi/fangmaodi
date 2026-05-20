@@ -1,5 +1,3 @@
-const API_URL = "https://88.lxmusic.xn--fiqs8s";
-const API_KEY = `lxmusic`;
 const SECRET_KEY = 'JaJ?a7Nwk_Fgj?2o:znAkst';
 const SCRIPT_MD5 = '1888f9865338afe6d5534b35171c61a4';
 
@@ -47,48 +45,19 @@ const sha256 = (function() {
 
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Content-Type', 'application/json');
 
-    if (req.method === 'OPTIONS') return res.status(200).end();
+    const { source, mid, type } = req.query;
+    if (!mid) return res.status(200).json({ status: "ok" });
 
-    const source = req.query.source || 'wy';
-    const mid = req.query.mid;
-    const quality = req.query.type || '128k';
+    // 仅在云端计算原厂合规签名路径，不发出真实 fetch 请求
+    const requestPath = `/lxmusicv4/url/${source}/${mid}/${type}`;
+    const sign = sha256(requestPath + SCRIPT_MD5 + SECRET_KEY);
 
-    if (!mid) {
-        return res.status(200).json({ code: 0, msg: "Vercel 接口正常，等待传入参数" });
-    }
-
-    try {
-        const requestPath = `/lxmusicv4/url/${source}/${mid}/${quality}`;
-        const sign = sha256(requestPath + SCRIPT_MD5 + SECRET_KEY);
-        const targetUrl = `${API_URL}${requestPath}?sign=${sign}`;
-
-        const fetchResponse = await fetch(targetUrl, {
-            method: 'GET',
-            headers: {
-                'accept': 'application/json',
-                'x-request-key': API_KEY,
-                'user-agent': 'lx-music-request/2.0.0'
-            }
-        });
-
-        const body = await fetchResponse.json();
-
-        // 核心修复：更严谨地清洗并提取真实歌曲直链
-        if (body && (body.code === 0 || body.code === 200)) {
-            const realUrl = body.data || body.url;
-            if (realUrl) {
-                return res.status(200).json({
-                    code: 0,
-                    url: realUrl
-                });
-            }
-        }
-        return res.status(200).json({ code: 2, msg: body?.msg || "上游解析失败" });
-
-    } catch (error) {
-        return res.status(200).json({ code: 4, msg: "中转异常: " + error.message });
-    }
+    // 直接返回拼装好的、高纯度的最终请求全路径
+    return res.status(200).json({
+        code: 0,
+        fullUrl: `https://88.lxmusic.xn--fiqs8s${requestPath}?sign=${sign}`
+    });
 };
