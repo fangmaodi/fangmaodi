@@ -6,15 +6,15 @@
     <title>👖裤佬电台直播网页版</title>
     <style>
         :root {
-            --primary-color: #2f80ed;
-            --bg-color: #f6f8fa;
+            --primary-color: #ff4757;
+            --bg-color: #f1f2f6;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg-color);
             margin: 0;
-            padding: 20px;
-            color: #333;
+            padding: 15px;
+            color: #2f3542;
         }
         .container {
             max-width: 1000px;
@@ -22,19 +22,247 @@
         }
         h1 {
             text-align: center;
-            color: #222;
+            font-size: 24px;
+            margin-bottom: 20px;
         }
-        /* 分类样式 */
+        /* 分类菜单 */
         .categories {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
             margin-bottom: 20px;
             background: #fff;
-            padding: 15px;
+            padding: 12px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
         }
+        .cat-btn {
+            background: #f1f2f6;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .cat-btn:hover, .cat-btn.active {
+            background: var(--primary-color);
+            color: white;
+        }
+        /* 电台列表 */
+        .radio-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 120px;
+        }
+        .radio-card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+            transition: transform 0.2s;
+        }
+        .radio-card:hover {
+            transform: translateY(-3px);
+        }
+        .radio-card img {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: #eee;
+        }
+        .radio-card h3 {
+            font-size: 13px;
+            margin: 8px 0 0 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* 底部固定播放器 */
+        .player-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #fff;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            z-index: 1000;
+        }
+        .player-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .player-info img {
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+        }
+        audio {
+            flex-grow: 1;
+            max-width: 400px;
+        }
+        #status {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            grid-column: 1 / -1;
+            padding: 40px 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>👖 裤佬电台直播</h1>
+    <div class="categories" id="categories"></div>
+    <div class="radio-grid" id="radio-grid">
+        <div id="status">正在初始化电台规则...</div>
+    </div>
+</div>
+
+<div class="player-bar">
+    <div class="player-info">
+        <img id="current-thumb" src="https://www.qingting.fm/favicon.ico" alt="thumb">
+        <div>
+            <div id="current-title" style="font-weight: bold; font-size: 14px;">请选择电台</div>
+            <div id="play-state" style="font-size: 11px; color: #666;">信号待命</div>
+        </div>
+    </div>
+    <audio id="audio-player" controls autoplay></audio>
+</div>
+
+<script>
+// 1. 完全还原 DRPy 规则内的分类与 URL
+const classNames = "广东&浙江&北京&天津&河北&上海&山西&内蒙古&辽宁&吉林&黑龙江&江苏&安徽&福建&江西&山东&河南&湖北&湖南&广西&海南&重庆&四川&贵州&云南&陕西&甘肃&宁夏&新疆&西藏&青海&资讯&音乐&交通&经济&文艺&都市&体育&双语&综合&生活&旅游&曲艺&方言".split("&");
+const classUrls = "217&99&3&5&7&83&19&31&44&59&69&85&111&129&139&151&169&187&202&239&254&257&259&281&291&316&327&351&357&308&342&433&442&429&439&432&441&430&431&440&438&435&436&434".split("&");
+const categories = classNames.map((name, index) => ({ name, id: classUrls[index] }));
+
+// 免费跨域代理池（用于在 GitHub 静态页里抓取外站 HTML）
+const proxies = [
+    (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+    (url) => `https://cors-anywhere.azm.workers.dev/${url}`
+];
+
+// 2. 初始化分类按钮
+const catContainer = document.getElementById('categories');
+categories.forEach((cat, idx) => {
+    const btn = document.createElement('button');
+    btn.className = `cat-btn ${idx === 0 ? 'active' : ''}`;
+    btn.innerText = cat.name;
+    btn.onclick = () => switchCategory(cat.id, btn);
+    catContainer.appendChild(btn);
+});
+
+// 3. 核心：严格执行 DRPy 规则抓取并解析 HTML
+async function loadRadios(classId) {
+    const grid = document.getElementById('radio-grid');
+    grid.innerHTML = '<div id="status">正在通过裤佬通道嗅探电台列表...</div>';
+    
+    // DRPy 规则中的 url: '/radiopage/fyclass/fypage'
+    const targetUrl = `http://www.qingting.fm/radiopage/${classId}/1`;
+    let htmlText = "";
+    
+    // 轮询代理进行跨域抓取
+    for (let proxy of proxies) {
+        try {
+            const res = await fetch(proxy(targetUrl));
+            if (!res.ok) continue;
+            
+            // 处理 allorigins 代理返回的特殊 JSON 格式
+            if (proxy.toString().includes('allorigins')) {
+                const json = await res.json();
+                htmlText = json.contents;
+            } else {
+                htmlText = await res.text();
+            }
+            if (htmlText) break;
+        } catch (e) {
+            console.log("当前代理失效，尝试备用通道...");
+        }
+    }
+
+    if (!htmlText) {
+        grid.innerHTML = '<div id="status">❌ 嗅探失败，请检查网络或刷新重试。</div>';
+        return;
+    }
+
+    // 4. 解析 HTML (遵循 DRPy 一级规则: '.contentSec&&.radio;span&&Text;img&&src;.descRadio&&Text;a&&href')
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlText, 'text/html');
+    const radioElements = doc.querySelectorAll('.contentSec .radio');
+
+    grid.innerHTML = '';
+    if (radioElements.length === 0) {
+        grid.innerHTML = '<div id="status">📭 该分类下没有搜寻到广播信号</div>';
+        return;
+    }
+
+    radioElements.forEach(el => {
+        try {
+            const title = el.querySelector('span').innerText || el.querySelector('.descRadio').innerText;
+            const imgEl = el.querySelector('img');
+            const thumb = imgEl ? imgEl.getAttribute('src') : 'https://www.qingting.fm/favicon.ico';
+            const aLink = el.querySelector('a').getAttribute('href'); // 类似 "/radios/3432"
+            
+            // 提取其中的数字 ID
+            const radioId = aLink.match(/\d+/)[0];
+
+            const card = document.createElement('div');
+            card.className = 'radio-card';
+            card.onclick = () => playRadio(radioId, title, thumb);
+            card.innerHTML = `
+                <img src="${thumb.startsWith('http') ? thumb : 'https:' + thumb}" alt="${title}" onerror="this.src='https://www.qingting.fm/favicon.ico'">
+                <h3>${title}</h3>
+            `;
+            grid.appendChild(card);
+        } catch (err) {
+            // 忽略个别解析失败的卡片
+        }
+    });
+}
+
+function switchCategory(id, btnElement) {
+    document.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('active'));
+    btnElement.classList.add('active');
+    loadRadios(id);
+}
+
+// 5. 核心 lazy 规则：将网页 ID 转换为 64k.mp3 音频直链并播放
+function playRadio(id, title, cover) {
+    // 严格遵循 DRPy 逻辑: input.replace("www.qingting.fm/radios/","lhttp.qingting.fm/live/")+"/64k.mp3"
+    const audioUrl = `https://lhttp.qingting.fm/live/${id}/64k.mp3`;
+    
+    const player = document.getElementById('audio-player');
+    const state = document.getElementById('play-state');
+    
+    player.src = audioUrl;
+    document.getElementById('current-title').innerText = title;
+    document.getElementById('current-thumb').src = cover.startsWith('http') ? cover : 'https:' + cover;
+    
+    state.innerText = "正在同步音频流...";
+    player.play().then(() => {
+        state.innerText = "● 正在直播";
+    }).catch(err => {
+        state.innerText = "点击流失败，尝试重新连接";
+        console.error(err);
+    });
+}
+
+// 默认加载第一个分类
+loadRadios(categories[0].id);
+</script>
+</body>
+</html>        }
         .cat-btn {
             background: #e1e4e8;
             border: none;
