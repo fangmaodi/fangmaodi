@@ -2,10 +2,208 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>zhaoxin 的个人主页</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>👖裤佬电台直播网页版</title>
+    <style>
+        :root {
+            --primary-color: #2f80ed;
+            --bg-color: #f6f8fa;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #222;
+        }
+        /* 分类样式 */
+        .categories {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 20px;
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .cat-btn {
+            background: #e1e4e8;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+        .cat-btn:hover, .cat-btn.active {
+            background: var(--primary-color);
+            color: white;
+        }
+        /* 电台列表 */
+        .radio-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 100px;
+        }
+        .radio-card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+        .radio-card:hover {
+            transform: translateY(-5px);
+        }
+        .radio-card img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: #eee;
+        }
+        .radio-card h3 {
+            font-size: 14px;
+            margin: 10px 0 5px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* 底部固定播放器 */
+        .player-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #fff;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            z-index: 1000;
+        }
+        .player-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .player-info img {
+            width: 45px;
+            height: 45px;
+            border-radius: 4px;
+        }
+        audio {
+            flex-grow: 1;
+            max-width: 500px;
+        }
+    </style>
 </head>
 <body>
-    <h1>欢迎来到 zhaoxin.bot.cd </h1>
-    <p>我的 GitHub Pages 网站已成功上线！</p>
+
+<div class="container">
+    <h1>👖 裤佬电台直播</h1>
+    
+    <div class="categories" id="categories"></div>
+
+    <div class="radio-grid" id="radio-grid">加载中...</div>
+</div>
+
+<div class="player-bar">
+    <div class="player-info">
+        <img id="current-thumb" src="https://www.qingting.fm/favicon.ico" alt="thumb">
+        <div>
+            <div id="current-title" style="font-weight: bold;">请选择电台</div>
+            <div style="font-size: 12px; color: #666;">正在直播</div>
+        </div>
+    </div>
+    <audio id="audio-player" controls autoplay></audio>
+</div>
+
+<script>
+// 1. 解析 DRPy 乱码后还原的分类数据
+const classNames = "广东&浙江&北京&天津&河北&上海&山西&内蒙古&辽宁&吉林&黑龙江&江苏&安徽&福建&江西&山东&河南&湖北&湖南&广西&海南&重庆&四川&贵州&云南&陕西&甘肃&宁夏&新疆&西藏&青海&资讯&音乐&交通&经济&文艺&都市&体育&双语&综合&生活&旅游&曲艺&方言".split("&");
+const classUrls = "217&99&3&5&7&83&19&31&44&59&69&85&111&129&139&151&169&187&202&239&254&257&259&281&291&316&327&351&357&308&342&433&442&429&439&432&441&430&431&440&438&435&436&434".split("&");
+
+const categories = classNames.map((name, index) => ({ name, id: classUrls[index] }));
+
+// 2. 初始化分类 DOM
+const catContainer = document.getElementById('categories');
+categories.forEach((cat, idx) => {
+    const btn = document.createElement('button');
+    btn.className = `cat-btn ${idx === 0 ? 'active' : ''}`;
+    btn.innerText = cat.name;
+    btn.onclick = () => switchCategory(cat.id, btn);
+    catContainer.appendChild(btn);
+});
+
+// 3. 切换分类加载数据 (利用蜻蜓FM开放接口，避开网页端CORS限制)
+async function loadRadios(classId) {
+    const grid = document.getElementById('radio-grid');
+    grid.innerHTML = '正在搜寻电台信号...';
+    
+    try {
+        // 使用蜻蜓官方API，通常该接口在前端允许跨域请求或可通过标准接口获取
+        const res = await fetch(`https://i.qingting.fm/wapi/channels?category=${classId}&page=1&pagesize=30`);
+        const data = await res.json();
+        
+        grid.innerHTML = '';
+        if(!data.data || data.data.length === 0) {
+            grid.innerHTML = '该分类下暂无电台';
+            return;
+        }
+
+        data.data.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'radio-card';
+            // 依据 lazy 规则：直链公式为转换为 lhttp.qingting.fm/live/{id}/64k.mp3
+            card.onclick = () => playRadio(item.id, item.title, item.cover);
+            
+            card.innerHTML = `
+                <img src="${item.cover || 'https://www.qingting.fm/favicon.ico'}" alt="${item.title}">
+                <h3>${item.title}</h3>
+            `;
+            grid.appendChild(card);
+        });
+    } catch (err) {
+        grid.innerHTML = '电台信号加载失败，请重试。';
+        console.error(err);
+    }
+}
+
+// 4. 切换分类点击事件
+function switchCategory(id, btnElement) {
+    document.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('active'));
+    btnElement.classList.add('active');
+    loadRadios(id);
+}
+
+// 5. 核心：播放电台（完美契合 lazy 里的 64k.mp3 直链公式）
+function playRadio(id, title, cover) {
+    const audioUrl = `https://lhttp.qingting.fm/live/${id}/64k.mp3`;
+    
+    document.getElementById('audio-player').src = audioUrl;
+    document.getElementById('current-title').innerText = title;
+    if(cover) document.getElementById('current-thumb').src = cover;
+    
+    document.getElementById('audio-player').play();
+}
+
+// 默认加载第一个分类（广东）
+loadRadios(categories[0].id);
+</script>
 </body>
 </html>
